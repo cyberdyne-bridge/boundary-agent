@@ -1,0 +1,12 @@
+[Unit]
+Description=Boundary VM autonomous activity
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/vms/an
+ExecStart=/usr/bin/python3 %h/vms/an/vm_activity.py --rounds 0 --delay 2
+Restart=no
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=Boundary web UI (8765)
+After=network.target boundary-model.service
+Wants=boundary-model.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/boundary-agent
+Environment=HOME=%h
+Environment=PYTHONUNBUFFERED=1
+Environment=BOUNDARY_NO_BROWSER=1
+ExecStart=/usr/bin/python3 -m boundary_agent --web 8765 --data-dir %h/boundary-live --base-url http://127.0.0.1:8099/v1 --model local --alarm 0.7 --sarcasm 0.8 --wander-idle 1 --wander-interval 1 --wander-daily 60 --wander-threshold 0.35 --initiative-gap-min 1 --initiative-daily 60
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

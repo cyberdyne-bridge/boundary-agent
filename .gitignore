@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 运行时数据（对话、影子、状态）
+data/
+*.sqlite3
+*.sqlite3-*
+*.jsonl
+*.log
+
+# 模型文件
+models/
+*.gguf
+
+.DS_Store
+
+# 会话原文 / 日记 / 实验现场：永不入库
+docs/session-*
+docs/chat-*
+data/
+capture/
+*.bak-*

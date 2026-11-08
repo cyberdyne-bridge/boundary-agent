@@ -1,0 +1,13 @@
+[Unit]
+Description=Boundary VM monitor (8766)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/vms/an
+ExecStart=/usr/bin/python3 %h/vms/an/vm_monitor.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

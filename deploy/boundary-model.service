@@ -1,0 +1,18 @@
+[Unit]
+Description=Boundary 4B model (llama-server 8099)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/boundary-agent
+Environment=HOME=%h
+Environment=LLAMA_DIR=%h/cyberdyne-demo/llama/llama-b11723-cuda
+Environment=PROFILE=4b
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/boundary-agent/serve.sh
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
