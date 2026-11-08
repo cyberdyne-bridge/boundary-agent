@@ -16,8 +16,11 @@
 > 本仓库**不包含完整会话记录**：会话原文、日记与实验现场库已全部剥离，`data/` 被 `.gitignore` 忽略。
 > `docs/` 的评测报告里保留少量**匿名化片段**（如「小岛」「热茶」）作为实验证据——不含身份信息，也不是对话记录。
 >
-> 位置说明：本仓属于 [cyberdyne-bridge](https://github.com/cyberdyne-bridge) 组织下的**独立研究项目**，
-> 与同组织的 CBAP / CPNC 协议**没有代码依赖**，也不属于该协议族。
+> 位置说明：本仓属于 [cyberdyne-bridge](https://github.com/cyberdyne-bridge) 组织下的研究项目。
+> 岸 这个 agent 本身**不依赖** CBAP 代码；但**同一条研究线产出的「自我模型」只读车厢**
+> 已经跑在 CPNC 的 cyberdyne agent 里
+> （[`agents/cyberdyne/plugins/自我模型/`](https://github.com/cyberdyne-bridge/cyberdyne-bridge-agent-physical-protocol/tree/main/agents/cyberdyne/plugins/自我模型)，v0.2.1 / 1001 行）。
+> CPNC 的旧名就是 **Cyberdyne Bridge（桥）**，见其 `NAMING.md`。
 
 ```
 你 ──▶ 时间回归 ──▶ 确定性信号 ──▶ ┌ Role A 服务者（并行）
