@@ -9,6 +9,7 @@ import html
 import re
 import sqlite3
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -25,7 +26,8 @@ CREATE TABLE IF NOT EXISTS documents (
   hash TEXT NOT NULL UNIQUE,
   text TEXT NOT NULL DEFAULT '',
   meta TEXT NOT NULL DEFAULT '',
-  created REAL NOT NULL
+  created REAL NOT NULL,
+  event_time REAL
 );
 CREATE TABLE IF NOT EXISTS chunks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,11 +100,19 @@ class RagStore:
         self.db = sqlite3.connect(str(self.path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        self._migrate()
         self.db.commit()
+
+    def _migrate(self):
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(documents)").fetchall()}
+        if "event_time" not in cols:
+            self.db.execute("ALTER TABLE documents ADD COLUMN event_time REAL")
+        self.db.execute("UPDATE documents SET event_time=created WHERE event_time IS NULL")
 
     def add_document(self, *, source: str, title: str, text: str, url: str = "",
                      kind: str = "doc", author: str = "", date: str = "",
                      license: str = "", meta: str = "",
+                     event_time: float | None = None,
                      size: int = 450, overlap: int = 60) -> int | None:
         text = (text or "").strip()
         if len(text) < 80:
@@ -111,10 +121,12 @@ class RagStore:
         row = self.db.execute("SELECT id FROM documents WHERE hash=?", (h,)).fetchone()
         if row:
             return int(row["id"])
+        created = time.time()
+        ev = float(event_time) if event_time is not None else created
         cur = self.db.execute(
-            "INSERT INTO documents(source,kind,title,url,author,date,license,hash,text,meta,created)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (source, kind, title[:300], url, author[:200], date, license, h, text, meta, time.time()),
+            "INSERT INTO documents(source,kind,title,url,author,date,license,hash,text,meta,created,event_time)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (source, kind, title[:300], url, author[:200], date, license, h, text, meta, created, ev),
         )
         doc_id = int(cur.lastrowid)
         for i, c in enumerate(chunk_text(text, size=size, overlap=overlap)):
@@ -136,7 +148,7 @@ class RagStore:
                 n += 1
         return n
 
-    def search(self, query: str, k: int = 6) -> list[dict]:
+    def search(self, query: str, k: int = 6, now: float | None = None) -> list[dict]:
         q = terms(query, query=True)
         if not q:
             return []
@@ -144,18 +156,45 @@ class RagStore:
         expr = " OR ".join('"' + t.replace('"', '""') + '"' for t in q[:40])
         try:
             rows = self.db.execute(
-                "SELECT c.id,c.doc_id,c.ord,c.text,d.title,d.source,d.url,"
+                "SELECT c.id,c.doc_id,c.ord,c.text,d.title,d.source,d.url,d.created,d.event_time,"
                 " bm25(chunks_fts) AS rank "
                 "FROM chunks_fts JOIN chunks c ON c.id=chunks_fts.rowid "
                 "JOIN documents d ON d.id=c.doc_id "
                 "WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?",
-                (expr, k),
+                (expr, max(k * 8, 30)),
             ).fetchall()
         except sqlite3.OperationalError:
             return []
-        return [{"id": r["id"], "doc_id": r["doc_id"], "ord": r["ord"],
-                 "text": r["text"], "title": r["title"], "source": r["source"],
-                 "url": r["url"], "rank": round(float(r["rank"]), 4)} for r in rows]
+        if not rows:
+            return []
+        now = time.time() if now is None else float(now)
+        # bm25 lower is better; negate for a positive similarity.
+        sims = []
+        for r in rows:
+            rank = float(r["rank"])
+            sims.append(max(0.0, -rank))
+        mx = max(sims) if sims else 0.0
+        out = []
+        for r, sim in zip(rows, sims):
+            created = float(r["created"] or 0.0)
+            ev = float(r["event_time"] or created)
+            age_days = max(0.0, (now - ev) / 86400.0) if ev else 0.0
+            decay = 1.0 if age_days <= 3.0 else 0.5
+            sim_norm = (sim / mx) if mx > 0 else 1.0
+            score = sim_norm * decay
+            ev_text = datetime.fromtimestamp(ev).strftime("%Y-%m-%d %H:%M:%S") if ev else "未知"
+            created_text = datetime.fromtimestamp(created).strftime("%Y-%m-%d %H:%M:%S") if created else "未知"
+            out.append({"id": r["id"], "doc_id": r["doc_id"], "ord": r["ord"],
+                        "text": f"[记录于 {ev_text}] {r['text']}",
+                        "title": r["title"], "source": r["source"],
+                        "url": r["url"], "rank": round(float(r["rank"]), 4),
+                        "created": created, "event_time": ev,
+                        "created_text": created_text, "event_time_text": ev_text,
+                        "age_days": round(age_days, 3), "time_decay": decay,
+                        "score": round(score, 4)})
+        # score 降序；同分时新的优先；再同则 bm25 更小者优先（rank 为负，故取正序）
+        out.sort(key=lambda x: (x["score"], -x["age_days"], x["rank"]), reverse=True)
+        return out[:k]
 
     def stats(self) -> dict:
         docs = self.db.execute("SELECT count(*) FROM documents").fetchone()[0]
@@ -172,4 +211,5 @@ class RagStore:
     def reset(self):
         self.db.executescript("DROP TABLE IF EXISTS chunks_fts; DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS documents;")
         self.db.executescript(SCHEMA)
+        self._migrate()
         self.db.commit()

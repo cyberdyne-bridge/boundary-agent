@@ -14,3 +14,6 @@ jobs:
           python-version: "3.12"
       - name: Run contract tests (mock model, no network)
         run: python3 selftest.py
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
